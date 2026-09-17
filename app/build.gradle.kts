@@ -30,6 +30,6 @@ android {
 }
 
 dependencies {
-    implementation("io.github.jaredmdobson:concentus:1.0.2")
+    implementation("com.plasmoverse:concentus:1.0.0")
     testImplementation("junit:junit:4.13.2")
 }
