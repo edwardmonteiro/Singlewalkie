@@ -1,0 +1,65 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main, walkie-v0.1]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android 36
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Gradle 9.6
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest
+
+      - name: Build debug APK
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: singlewalkie-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish persistent GitHub prerelease
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          cp "$APK" SingleWalkie-v0.1-debug.apk
+          if gh release view v0.1.0-debug >/dev/null 2>&1; then
+            gh release upload v0.1.0-debug SingleWalkie-v0.1-debug.apk --clobber
+          else
+            gh release create v0.1.0-debug SingleWalkie-v0.1-debug.apk \
+              --target "$GITHUB_SHA" \
+              --title "SingleWalkie v0.1 Debug" \
+              --notes "Android debug APK for the first Meshnet peer-to-peer push-to-talk prototype." \
+              --prerelease
+          fi
