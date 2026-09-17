@@ -191,7 +191,7 @@ class MainActivity : Activity() {
             setHintTextColor(Color.rgb(105, 115, 125))
             setTextColor(Color.WHITE)
             textSize = 16f
-            singleLine = true
+            isSingleLine = true
             background = rounded(PANEL, 12f, BORDER)
             setPadding(dp(14), 0, dp(14), 0)
             parent.addView(this, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply {
