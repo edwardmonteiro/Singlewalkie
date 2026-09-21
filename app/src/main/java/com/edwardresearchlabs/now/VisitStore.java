@@ -22,6 +22,7 @@ public final class VisitStore {
             JSONObject o = new JSONObject();
             o.put("type", type);
             o.put("ts", ts);
+            o.put("placeName", p.getString("place_name", "Saved place"));
             if ("ENTER".equals(type)) p.edit().putLong(ENTER_TS, ts).apply();
             if ("EXIT".equals(type)) {
                 long enter = p.getLong(ENTER_TS, 0);
@@ -49,9 +50,11 @@ public final class VisitStore {
                 JSONObject o = a.getJSONObject(i);
                 String type = o.optString("type");
                 long ts = o.optLong("ts");
+                String place = o.optString("placeName", "Saved place");
+                s.append(place).append("\n");
                 s.append(type).append("   ").append(f.format(new Date(ts)));
                 if (o.has("durationMin")) s.append("   ·   ").append(o.optLong("durationMin")).append(" min");
-                s.append("\n");
+                s.append("\n\n");
             }
             return s.toString();
         } catch (Exception e) {
@@ -68,12 +71,41 @@ public final class VisitStore {
                 .apply();
     }
 
+    public static void confirmPlace(Context c, String name, int confidence) {
+        c.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
+                .putString("place_name", name)
+                .putInt("place_confidence", confidence)
+                .putBoolean("place_confirmed", true)
+                .apply();
+    }
+
+    public static boolean hasPlace(Context c) {
+        return c.getSharedPreferences(PREF, Context.MODE_PRIVATE).getBoolean("has_place", false);
+    }
+
+    public static double lat(Context c) {
+        return Double.longBitsToDouble(c.getSharedPreferences(PREF, Context.MODE_PRIVATE).getLong("lat", 0));
+    }
+
+    public static double lon(Context c) {
+        return Double.longBitsToDouble(c.getSharedPreferences(PREF, Context.MODE_PRIVATE).getLong("lon", 0));
+    }
+
+    public static float radius(Context c) {
+        return c.getSharedPreferences(PREF, Context.MODE_PRIVATE).getFloat("radius", 100f);
+    }
+
     public static String placeSummary(Context c) {
         SharedPreferences p = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
         if (!p.getBoolean("has_place", false)) return "No place saved";
         double lat = Double.longBitsToDouble(p.getLong("lat", 0));
         double lon = Double.longBitsToDouble(p.getLong("lon", 0));
         float r = p.getFloat("radius", 100f);
-        return String.format(Locale.US, "Saved place\n%.5f, %.5f  ·  %.0f m radius", lat, lon, r);
+        String name = p.getString("place_name", "Unknown place");
+        boolean confirmed = p.getBoolean("place_confirmed", false);
+        int confidence = p.getInt("place_confidence", 0);
+        String label = confirmed ? name + " · confirmed" : name;
+        if (confidence > 0 && !confirmed) label += " · " + confidence + "%";
+        return String.format(Locale.US, "%s\n%.5f, %.5f  ·  %.0f m radius", label, lat, lon, r);
     }
 }
