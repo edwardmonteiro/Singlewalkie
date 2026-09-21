@@ -43,7 +43,7 @@ public final class VisitStore {
         try {
             SharedPreferences p = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
             JSONArray a = new JSONArray(p.getString(EVENTS, "[]"));
-            if (a.length() == 0) return "No visits yet.\n\nSave this place, leave the area, then return.";
+            if (a.length() == 0) return "No visits yet.\n\nSensing is passive after setup.";
             StringBuilder s = new StringBuilder();
             SimpleDateFormat f = new SimpleDateFormat("MMM d  HH:mm", Locale.getDefault());
             for (int i = a.length() - 1; i >= 0; i--) {
@@ -79,6 +79,21 @@ public final class VisitStore {
                 .apply();
     }
 
+    public static void suggestPlace(Context c, String name, int confidence) {
+        SharedPreferences p = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+        if (p.getBoolean("place_confirmed", false)) return;
+        p.edit()
+                .putString("place_name", name)
+                .putInt("place_confidence", confidence)
+                .putBoolean("place_confirmed", false)
+                .apply();
+    }
+
+    public static String currentPlaceName(Context c) {
+        return c.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+                .getString("place_name", "Saved place");
+    }
+
     public static boolean hasPlace(Context c) {
         return c.getSharedPreferences(PREF, Context.MODE_PRIVATE).getBoolean("has_place", false);
     }
@@ -101,11 +116,11 @@ public final class VisitStore {
         double lat = Double.longBitsToDouble(p.getLong("lat", 0));
         double lon = Double.longBitsToDouble(p.getLong("lon", 0));
         float r = p.getFloat("radius", 100f);
-        String name = p.getString("place_name", "Unknown place");
+        String name = p.getString("place_name", "Identifying place…");
         boolean confirmed = p.getBoolean("place_confirmed", false);
         int confidence = p.getInt("place_confidence", 0);
         String label = confirmed ? name + " · confirmed" : name;
-        if (confidence > 0 && !confirmed) label += " · " + confidence + "%";
+        if (confidence > 0 && !confirmed) label += " · " + confidence + "% likely";
         return String.format(Locale.US, "%s\n%.5f, %.5f  ·  %.0f m radius", label, lat, lon, r);
     }
 }
