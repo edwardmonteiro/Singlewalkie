@@ -41,14 +41,19 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
                 return;
         }
 
-        VisitStore.addEvent(context, type, System.currentTimeMillis());
+        boolean changed = VisitStore.processTransition(
+                context, type, System.currentTimeMillis());
+
+        // Duplicate transitions are intentionally ignored.
+        if (!changed) return;
 
         Intent update = new Intent(MainActivity.ACTION_VISIT_UPDATED);
         update.setPackage(context.getPackageName());
         context.sendBroadcast(update);
 
         if ("ENTER".equals(type) || "DWELL".equals(type)) {
-            OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(AutoPlaceWorker.class).build();
+            OneTimeWorkRequest work =
+                    new OneTimeWorkRequest.Builder(AutoPlaceWorker.class).build();
             WorkManager.getInstance(context).enqueueUniqueWork(
                     "now-auto-place",
                     ExistingWorkPolicy.REPLACE,
@@ -61,7 +66,8 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
 
     private void showNotification(Context context, String type) {
         if (Build.VERSION.SDK_INT >= 33 &&
-                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
             return;
         }
 
@@ -74,7 +80,7 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
                     "NOW visit sensing",
                     NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Passive ENTER, DWELL and EXIT detections");
+            channel.setDescription("Passive visit detection");
             nm.createNotificationChannel(channel);
         }
 
@@ -83,14 +89,18 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
         if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
         PendingIntent pi = PendingIntent.getActivity(context, 202, open, flags);
 
-        String place = VisitStore.currentPlaceName(context);
+        String title;
+        if ("ENTER".equals(type)) title = "NOW · visit started";
+        else if ("DWELL".equals(type)) title = "NOW · visit confirmed";
+        else title = "NOW · visit finished";
+
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(context, CHANNEL_ID)
                 : new Notification.Builder(context);
 
         b.setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                .setContentTitle("NOW · " + type)
-                .setContentText(place)
+                .setContentTitle(title)
+                .setContentText(VisitStore.currentPlaceName(context))
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(true);

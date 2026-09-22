@@ -12,6 +12,8 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -48,11 +50,21 @@ public class MainActivity extends Activity {
 
     private GeofencingClient geofencingClient;
     private FusedLocationProviderClient locationClient;
-    private TextView status, radiusLabel, history, discoveryStatus;
+    private TextView status, radiusLabel, visits, discoveryStatus;
     private SeekBar radiusBar;
     private LinearLayout candidates;
     private MapView mapView;
     private boolean visitReceiverRegistered = false;
+
+    private final Handler liveHandler = new Handler(Looper.getMainLooper());
+    private final Runnable liveTick = new Runnable() {
+        @Override public void run() {
+            if (visits != null && VisitStore.hasActiveVisit(MainActivity.this)) {
+                visits.setText(VisitStore.renderVisits(MainActivity.this));
+            }
+            liveHandler.postDelayed(this, 30000);
+        }
+    };
 
     private final BroadcastReceiver visitReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -63,6 +75,7 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         MapLibre.getInstance(this);
+        VisitStore.migrateLegacyIfNeeded(this);
         geofencingClient = LocationServices.getGeofencingClient(this);
         locationClient = LocationServices.getFusedLocationProviderClient(this);
         buildUi(b);
@@ -99,7 +112,7 @@ public class MainActivity extends Activity {
         TextView brand = text("NOW", 34);
         brand.setTextColor(Color.BLACK);
         root.addView(brand);
-        root.addView(text("Passive sensing · LIVE", 16));
+        root.addView(text("Passive visits · local-first", 16));
 
         mapView = new MapView(this);
         mapView.onCreate(state);
@@ -129,12 +142,13 @@ public class MainActivity extends Activity {
         save.setOnClickListener(v -> saveCurrentPlace());
         root.addView(save);
 
-        Button discover = button("Inspect / correct detected place");
-        discover.setOnClickListener(v -> discoverNearby());
-        root.addView(discover);
+        Button inspect = button("Inspect / correct place");
+        inspect.setOnClickListener(v -> discoverNearby());
+        root.addView(inspect);
 
         discoveryStatus = text(
-                "Place identification runs automatically on ENTER and DWELL.",
+                "Place identification runs automatically. " +
+                "Use Inspect only when you want to correct it.",
                 14);
         root.addView(discoveryStatus);
 
@@ -146,16 +160,16 @@ public class MainActivity extends Activity {
         background.setOnClickListener(v -> openAppSettings());
         root.addView(background);
 
-        TextView h = text("VISIT HISTORY · AUTO-UPDATES", 13);
+        TextView h = text("VISITS", 13);
         h.setPadding(0,38,0,8);
         root.addView(h);
 
-        history = text("", 16);
-        root.addView(history);
+        visits = text("", 17);
+        root.addView(visits);
 
         TextView note = text(
-                "No refresh button is required. Visit events are stored locally. " +
-                "Automatic place identification queries nearby OpenStreetMap POIs.",
+                "NOW groups raw geofence signals into visits. Duplicate ENTER, DWELL " +
+                "and EXIT events are ignored. Existing V0.1 history is migrated automatically.",
                 13);
         note.setPadding(0,36,0,30);
         root.addView(note);
@@ -267,9 +281,10 @@ public class MainActivity extends Activity {
         PlaceDiscovery.Candidate best = result.get(0);
         VisitStore.suggestPlace(this, best.name, best.confidence);
         status.setText(VisitStore.placeSummary(this));
+        visits.setText(VisitStore.renderVisits(this));
         discoveryStatus.setText(
-                "Likely place: " + best.name + " · " + best.confidence +
-                        "% · tap only if you want to correct it"
+                "Likely: " + best.name + " · " + best.confidence +
+                        "% · tap only to correct"
         );
 
         for (PlaceDiscovery.Candidate c : result) {
@@ -284,6 +299,7 @@ public class MainActivity extends Activity {
                 VisitStore.confirmPlace(this, c.name, 100);
                 showOnMap(c.lat, c.lon, c.name);
                 status.setText(VisitStore.placeSummary(this));
+                visits.setText(VisitStore.renderVisits(this));
                 discoveryStatus.setText("Confirmed: " + c.name);
             });
             candidates.addView(b);
@@ -343,7 +359,7 @@ public class MainActivity extends Activity {
                             discoverNearby();
                             Toast.makeText(
                                     this,
-                                    "Passive sensing is active. No refresh click needed.",
+                                    "Passive visit sensing is active.",
                                     Toast.LENGTH_LONG
                             ).show();
                         })
@@ -372,7 +388,7 @@ public class MainActivity extends Activity {
 
     private void refresh() {
         status.setText(VisitStore.placeSummary(this));
-        history.setText(VisitStore.renderHistory(this));
+        visits.setText(VisitStore.renderVisits(this));
 
         if (VisitStore.hasPlace(this)) {
             showOnMap(
@@ -407,6 +423,7 @@ public class MainActivity extends Activity {
             registerReceiver(visitReceiver, filter);
         }
         visitReceiverRegistered = true;
+        liveHandler.post(liveTick);
         refresh();
     }
 
@@ -425,6 +442,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onStop() {
+        liveHandler.removeCallbacks(liveTick);
         if (visitReceiverRegistered) {
             unregisterReceiver(visitReceiver);
             visitReceiverRegistered = false;

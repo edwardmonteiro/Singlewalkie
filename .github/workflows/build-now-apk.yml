@@ -21,5 +21,5 @@ jobs:
         run: gradle :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: NOW-v0.2.1-auto
+          name: NOW-v0.3-visits
           path: app/build/outputs/apk/debug/app-debug.apk
