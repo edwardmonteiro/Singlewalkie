@@ -7,6 +7,8 @@
 
     <application
         android:allowBackup="true"
+        android:icon="@drawable/now_icon"
+        android:roundIcon="@drawable/now_icon"
         android:label="NOW"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
